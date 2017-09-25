@@ -21,6 +21,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "debug.h"
+
 #include "FT857D.h"
 #include "support.h"
 
@@ -53,6 +55,7 @@ RIG_FT857D::RIG_FT857D() {
 	has_split_AB =
 	has_smeter =
 	has_power_out =
+	has_power_control =
 	has_mode_control = true;
 
 	precision = 10;
@@ -200,6 +203,56 @@ int  RIG_FT857D::get_power_out(void)
 		return fwdpwr;
 	}
 	return 0;
+}
+
+int RIG_FT857D::get_power_control()
+{
+	if(buffered_power_q)
+		return buffered_power;
+
+	init_cmd();
+	cmd[1] = 0x9B;
+	cmd[4] = 0xBB;
+	int ret = waitN(2, 100, "get pcont", HEX);
+	if (ret == 2) {
+		int pwr = replybuff[0] & 0x7F;
+		return pwr;
+	}
+	return 0;
+}
+
+void RIG_FT857D::update_power_control(void)
+{
+	if (--buffered_power_q == 0) {
+		init_cmd();
+		cmd[1] = 0x9B;
+		cmd[4] = 0xBB;
+		// Read eeprom values as we have to write 2 bytes
+		int ret = waitN(2, 100, "get pcont-read", HEX);
+		if (ret == 2) {
+			init_cmd();
+			cmd[1] = 0x9B;
+			cmd[2] = char((int)buffered_power & 0x7F);
+			cmd[3] = replybuff[1];
+			cmd[4] = 0xBC;
+			// write back 2 bytes
+			ret = waitN(1, 100, "get pcont-write", HEX);
+		}
+	}
+}
+
+static void ft857d_set_power_control_handler(void*)
+{
+	pthread_mutex_lock(&mutex_serial);
+	((RIG_FT857D*)selrig)->update_power_control();
+	pthread_mutex_unlock(&mutex_serial);
+}
+
+void RIG_FT857D::set_power_control(double val)
+{
+	buffered_power = (int)val;
+	buffered_power_q++;
+	Fl::add_timeout(0.5, ft857d_set_power_control_handler, 0);
 }
 
 int  RIG_FT857D::get_smeter(void)

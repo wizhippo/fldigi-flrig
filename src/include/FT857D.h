@@ -44,7 +44,11 @@ public:
 	int  get_modeB();
 
 	int  get_power_out(void);
+
 	int  get_smeter(void);
+
+	int  get_power_control();
+	void set_power_control(double val);
 
 	void selectA();
 	void selectB();
@@ -53,13 +57,17 @@ public:
 	void set_split(bool val);
 
 	int  adjust_bandwidth(int m) { return 0; }
-
+	// used to queue callback to limit eeprom writes
+	void update_power_control(void);
 private:
 	void init_cmd();
 	void set_getACK();
 
 protected:
 	bool onB;
+	// used to queue change to limit eeprom writes
+	int buffered_power;
+	int buffered_power_q;
 };
 
 class RIG_FT897D : public RIG_FT857D {
